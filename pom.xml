@@ -54,6 +54,16 @@
         </dependency>
     </dependencies>
 
+    <!-- Куда публикуется библиотека: GitHub Packages, репозиторий elementary-game-core.
+         id должен совпадать с <server><id> в ~/.m2/settings.xml, где лежит токен. -->
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/solomain-games/elementary-game-core</url>
+        </repository>
+    </distributionManagement>
+
     <build>
         <plugins>
             <plugin>
