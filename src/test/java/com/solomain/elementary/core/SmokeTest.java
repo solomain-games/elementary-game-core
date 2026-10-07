@@ -8,6 +8,6 @@ class SmokeTest {
 
     @Test
     void buildAndTestInfrastructureWorks() {
-        assertThat(Runtime.version().feature()).isGreaterThanOrEqualTo(25);
+        assertThat(Runtime.version().feature()).isGreaterThanOrEqualTo(99);
     }
 }
