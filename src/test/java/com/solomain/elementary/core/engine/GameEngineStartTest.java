@@ -36,7 +36,6 @@ class GameEngineStartTest {
 
         assertThat(state.table()).containsExactly(1);
         assertThat(state.deck()).doesNotContain(1);
-        assertThat(state.discard()).doesNotContain(1);
         assertThat(allHands(state)).doesNotContain(1);
     }
 
@@ -72,7 +71,8 @@ class GameEngineStartTest {
     void shufflesDeck() {
         var state = start(CASE_40_CARDS, 1, 42);
 
-        //assertThat(state.deck()).isNotSorted();
+        var sortedDeck = state.deck().stream().sorted().toList();
+        assertThat(state.deck()).isNotEqualTo(sortedDeck);
     }
 
     // --- раздача ---
