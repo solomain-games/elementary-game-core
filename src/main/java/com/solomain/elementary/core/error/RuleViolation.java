@@ -14,5 +14,7 @@ public enum RuleViolation {
     /** Сейчас ход другого игрока. */
     NOT_YOUR_TURN,
     /** Такой карты нет в руке игрока. */
-    CARD_NOT_IN_HAND
+    CARD_NOT_IN_HAND,
+    /** Команда не подходит к текущему статусу игрока (например, вернуться, не уходя). */
+    INVALID_PLAYER_STATUS
 }

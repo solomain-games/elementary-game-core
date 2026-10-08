@@ -1,23 +1,22 @@
 package com.solomain.elementary.core.engine;
 
 import com.solomain.elementary.core.error.RuleViolation;
-import com.solomain.elementary.core.model.GameSettings;
-import com.solomain.elementary.core.model.GameState;
 import com.solomain.elementary.core.model.Phase;
-import com.solomain.elementary.core.model.Player;
 import com.solomain.elementary.core.model.PlayerStatus;
-import com.solomain.elementary.core.model.ReserveCard;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
+import static com.solomain.elementary.core.TestStates.accepted;
+import static com.solomain.elementary.core.TestStates.allCards;
+import static com.solomain.elementary.core.TestStates.hand;
+import static com.solomain.elementary.core.TestStates.player;
+import static com.solomain.elementary.core.TestStates.playing;
+import static com.solomain.elementary.core.TestStates.reserve;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DisplayName("GameEngine.handle — ход игрока")
@@ -65,7 +64,7 @@ class GameEngineTurnTest {
         @Test
         @DisplayName("после хода ни одна карта не потерялась и не задвоилась")
         void keepsEveryCardExactlyOnce() {
-            var state = playing(0, List.of(10, 11), reserve(12, "p3"),
+            var state = playing(0, List.of(10, 11), reserve("p3", 12),
                     player("p1", 5, 6), player("p2", 7, 8));
 
             var after = accepted(GameEngine.handle(state, new DiscardCard("p1", 6)));
@@ -92,7 +91,7 @@ class GameEngineTurnTest {
         @Test
         @DisplayName("когда основная колода пуста, берёт из резерва")
         void drawsFromReserveWhenDeckIsEmpty() {
-            var state = playing(0, List.of(), reserve(12, "p3"), player("p1", 5), player("p2", 7));
+            var state = playing(0, List.of(), reserve("p3", 12), player("p1", 5), player("p2", 7));
 
             var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
 
@@ -211,6 +210,34 @@ class GameEngineTurnTest {
             assertThat(after.phase()).isEqualTo(Phase.PLAYING);
             assertThat(after.currentPlayerIndex()).isEqualTo(1);
         }
+        @Test
+        @DisplayName("игрок без карт в начале своего хода добирает из резерва и ходит")
+        void playerWithEmptyHandDrawsAtStartOfTurn() {
+            // p2 без карт, колода пуста, в резерве карты вышедшего p3
+            var state = playing(0, List.of(), reserve("p3", 12, 13),
+                    player("p1", 5), player("p2"), player("p3", PlayerStatus.LEFT));
+
+            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+
+            // p1 добрал 12 в конце своего хода, p2 добрал 13 в начале своего
+            assertThat(after.currentPlayerIndex()).isEqualTo(1);
+            assertThat(hand(after, "p2")).containsExactly(13);
+            assertThat(after.reserve()).isEmpty();
+            assertThat(after.phase()).isEqualTo(Phase.PLAYING);
+        }
+
+        @Test
+        @DisplayName("ходы не заканчиваются, пока в резерве есть карты")
+        void doesNotEndWhileReserveHasCards() {
+            var state = playing(0, List.of(), reserve("p3", 12),
+                    player("p1", 5), player("p2"), player("p3", PlayerStatus.LEFT));
+
+            var after = accepted(GameEngine.handle(state, new DiscardCard("p1", 5)));
+
+            assertThat(after.phase()).isEqualTo(Phase.PLAYING);
+            assertThat(hand(after, "p1")).containsExactly(12);
+        }
+
     }
 
     @Nested
@@ -257,55 +284,5 @@ class GameEngineTurnTest {
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.CARD_NOT_IN_HAND));
         }
-    }
-
-    // --- помощники ---
-
-    /** Состояние в фазе PLAYING: карта №1 на столе, сброс пуст, ход игрока с индексом {@code current}. */
-    private static GameState playing(int current, List<Integer> deck, Player... players) {
-        return playing(current, deck, List.of(), players);
-    }
-
-    private static GameState playing(int current, List<Integer> deck, List<ReserveCard> reserve, Player... players) {
-        return new GameState("test", new GameSettings("p1", null), Phase.PLAYING,
-                List.of(players), List.of(1), deck, reserve, List.of(),
-                current, 1, null, null,
-                Map.of(), Set.of(), Map.of());
-    }
-
-    private static Player player(String id, Integer... hand) {
-        return player(id, PlayerStatus.ACTIVE, hand);
-    }
-
-    private static Player player(String id, PlayerStatus status, Integer... hand) {
-        return new Player(id, "Игрок " + id, status, List.of(hand));
-    }
-
-    private static List<ReserveCard> reserve(int cardNumber, String ownerId) {
-        return List.of(new ReserveCard(cardNumber, ownerId));
-    }
-
-    private static GameState accepted(CommandResult result) {
-        assertThat(result).isInstanceOf(CommandResult.Accepted.class);
-        return ((CommandResult.Accepted) result).state();
-    }
-
-    private static List<Integer> hand(GameState state, String playerId) {
-        return state.players().stream()
-                .filter(player -> player.id().equals(playerId))
-                .findFirst()
-                .orElseThrow()
-                .hand();
-    }
-
-    /** Все карты партии вне зависимости от места: стол, сброс, руки, колода, резерв. */
-    private static List<Integer> allCards(GameState state) {
-        var all = new ArrayList<Integer>();
-        all.addAll(state.table());
-        all.addAll(state.discard());
-        state.players().forEach(player -> all.addAll(player.hand()));
-        all.addAll(state.deck());
-        state.reserve().forEach(card -> all.add(card.cardNumber()));
-        return all;
     }
 }
