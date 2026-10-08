@@ -107,6 +107,24 @@ class CaseDefinitionTest {
         assertThat(caseDef.cards()).extracting(Card::number).containsExactly(1, 2);
     }
 
+    @Test
+    @DisplayName("находит карту по номеру")
+    void findsCardByNumber() {
+        var caseDef = new CaseDefinition(ID, List.of(card(1), card(2), card(3)), List.of(question("culprit")), SOLUTION);
+
+        assertThat(caseDef.card(2).number()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("отклоняет запрос несуществующей карты")
+    void rejectsUnknownCardNumber() {
+        var caseDef = new CaseDefinition(ID, List.of(card(1)), List.of(question("culprit")), SOLUTION);
+
+        assertThatThrownBy(() -> caseDef.card(99))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("99");
+    }
+
     private static Card card(int number) {
         return new ImageCard(number, true, "cards/%02d.webp".formatted(number), null);
     }

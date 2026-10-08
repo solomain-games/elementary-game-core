@@ -60,6 +60,20 @@ public record GameState(String caseId, GameSettings settings, Phase phase, List<
         scores = Map.copyOf(scores);
     }
 
+    /**
+     * Индекс игрока в {@link #players()} по его идентификатору.
+     *
+     * @return индекс или {@code -1}, если такого игрока в партии нет
+     */
+    public int indexOfPlayer(String playerId) {
+        for (int i = 0; i < players.size(); i++) {
+            if (players.get(i).id().equals(playerId)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     // «Изменение» неизменяемого состояния: создаётся копия, в которой заменено одно поле.
 
     /** Копия состояния с новым значением {@code phase}. */
