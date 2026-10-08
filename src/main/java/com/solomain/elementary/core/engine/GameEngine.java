@@ -12,10 +12,12 @@ import com.solomain.elementary.core.model.ReserveCard;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.random.RandomGenerator;
 import java.util.stream.Collectors;
@@ -153,8 +155,14 @@ public final class GameEngine {
         return switch (command) {
             case PlayCard c -> takeTurn(state, c.playerId(), c.cardNumber(), true);
             case DiscardCard c -> takeTurn(state, c.playerId(), c.cardNumber(), false);
+            case PlayerDisconnected c -> disconnect(state, c.playerId());
+            case PlayerDisconnectTimeout c -> leave(state, c.playerId(), EnumSet.of(PlayerStatus.DISCONNECTED));
+            case PlayerLeft c -> leave(state, c.playerId(), EnumSet.of(PlayerStatus.ACTIVE, PlayerStatus.DISCONNECTED));
+            case PlayerReturned c -> returnPlayer(state, c.playerId());
         };
     }
+
+    // ===== Ход =====
 
     /**
      * Ход игрока (ТЗ, 4.2–4.4): выложить или сбросить карту, добрать одну и передать ход.
@@ -189,53 +197,182 @@ public final class GameEngine {
         } else {
             discard.add(cardNumber);
         }
+        GameState after = replacePlayer(state, playerIndex, player.withHand(hand))
+                .withTable(table)
+                .withDiscard(discard);
 
-        // 3. Добор: сначала основная колода, когда она пуста — резерв (ТЗ, 4.4).
+        // 3. Добор в конце хода и передача хода следующему.
+        after = drawFor(after, playerIndex);
+        return new CommandResult.Accepted(advanceTurn(after, playerIndex));
+    }
+
+    /**
+     * Игрок добирает одну карту: сверху основной колоды, а когда она пуста — первую из резерва (ТЗ, 4.4).
+     * Если брать неоткуда, состояние не меняется.
+     */
+    private static GameState drawFor(GameState state, int playerIndex) {
         List<Integer> deck = new ArrayList<>(state.deck());
         List<ReserveCard> reserve = new ArrayList<>(state.reserve());
+
+        int card;
         if (!deck.isEmpty()) {
-            hand.add(deck.removeFirst());
+            card = deck.removeFirst();
         } else if (!reserve.isEmpty()) {
-            hand.add(reserve.removeFirst().cardNumber());
+            card = reserve.removeFirst().cardNumber();
+        } else {
+            return state;
         }
 
-        List<Player> players = new ArrayList<>(state.players());
-        players.set(playerIndex, player.withHand(hand));
-
-        // 4. Передача хода. Если ходить некому — карты кончились, фаза NO_MOVES_LEFT.
-        GameState after = state
-                .withPlayers(players)
-                .withTable(table)
-                .withDiscard(discard)
+        Player player = state.players().get(playerIndex);
+        List<Integer> hand = new ArrayList<>(player.hand());
+        hand.add(card);
+        return replacePlayer(state, playerIndex, player.withHand(hand))
                 .withDeck(deck)
-                .withReserve(reserve)
-                .withTurnNumber(state.turnNumber() + 1);
+                .withReserve(reserve);
+    }
 
-        int nextIndex = nextPlayerIndex(players, playerIndex);
+    /**
+     * Передаёт ход следующему игроку, который может ходить (ТЗ, 4.2).
+     * Если у него нет карт, он сначала добирает одну. Если ходить некому — фаза {@link Phase#NO_MOVES_LEFT}.
+     *
+     * @param fromIndex индекс игрока, после которого ищется следующий
+     */
+    private static GameState advanceTurn(GameState state, int fromIndex) {
+        GameState after = state.withTurnNumber(state.turnNumber() + 1);
+
+        int nextIndex = nextPlayerIndex(after, fromIndex);
         if (nextIndex == -1) {
-            after = after.withPhase(Phase.NO_MOVES_LEFT);
-        } else {
-            after = after.withCurrentPlayerIndex(nextIndex);
+            return after.withPhase(Phase.NO_MOVES_LEFT);
+        }
+
+        after = after.withCurrentPlayerIndex(nextIndex);
+        if (after.players().get(nextIndex).hand().isEmpty()) {
+            after = drawFor(after, nextIndex);
+        }
+        return after;
+    }
+
+    /**
+     * Ищет по кругу, начиная со следующего после {@code from}, игрока, который может ходить:
+     * не вышел из партии и либо имеет карты в руке, либо может добрать (колода или резерв не пусты).
+     * Отключившиеся не пропускаются — их ход ждёт (ТЗ, 4.5).
+     * Последним проверяется сам игрок {@code from}: если ходить может только он, ход остаётся у него.
+     *
+     * @return индекс следующего игрока или {@code -1}, если ходить некому
+     */
+    private static int nextPlayerIndex(GameState state, int from) {
+        boolean canDraw = !state.deck().isEmpty() || !state.reserve().isEmpty();
+        List<Player> players = state.players();
+        int count = players.size();
+        for (int step = 1; step <= count; step++) {
+            int index = (from + step) % count;
+            Player candidate = players.get(index);
+            if (candidate.status() != PlayerStatus.LEFT && (canDraw || !candidate.hand().isEmpty())) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    // ===== Отключение, выход, возвращение (ТЗ, 4.5) =====
+
+    /**
+     * Игрок потерял связь: статус {@code DISCONNECTED}, карты остаются в руке, его ход ждёт.
+     */
+    private static CommandResult disconnect(GameState state, String playerId) {
+        int playerIndex = state.indexOfPlayer(playerId);
+        Optional<RuleViolation> violation = checkPresenceCommand(state, playerIndex, EnumSet.of(PlayerStatus.ACTIVE));
+        if (violation.isPresent()) {
+            return new CommandResult.Rejected(violation.get());
+        }
+
+        Player player = state.players().get(playerIndex);
+        return new CommandResult.Accepted(
+                replacePlayer(state, playerIndex, player.withStatus(PlayerStatus.DISCONNECTED)));
+    }
+
+    /**
+     * Игрок вышел (сам или не вернувшись за 2 минуты): карты уходят в конец резерва с пометкой владельца,
+     * статус {@code LEFT}. Если сейчас был его ход, ход переходит к следующему.
+     *
+     * @param allowedStatuses статусы, из которых возможен выход этой командой
+     */
+    private static CommandResult leave(GameState state, String playerId, Set<PlayerStatus> allowedStatuses) {
+        int playerIndex = state.indexOfPlayer(playerId);
+        Optional<RuleViolation> violation = checkPresenceCommand(state, playerIndex, allowedStatuses);
+        if (violation.isPresent()) {
+            return new CommandResult.Rejected(violation.get());
+        }
+
+        Player player = state.players().get(playerIndex);
+        List<ReserveCard> reserve = new ArrayList<>(state.reserve());
+        for (int cardNumber : player.hand()) {
+            reserve.add(new ReserveCard(cardNumber, playerId));
+        }
+        GameState after = replacePlayer(state, playerIndex, player.withHand(List.of()).withStatus(PlayerStatus.LEFT))
+                .withReserve(reserve);
+
+        boolean turnsInProgress = state.phase() == Phase.PROLOGUE || state.phase() == Phase.PLAYING;
+        if (turnsInProgress && playerIndex == state.currentPlayerIndex()) {
+            after = advanceTurn(after, playerIndex);
         }
         return new CommandResult.Accepted(after);
     }
 
     /**
-     * Ищет по кругу, начиная со следующего после {@code from}, игрока, который может ходить:
-     * не вышел из партии и имеет карты в руке. Отключившиеся не пропускаются — их ход ждёт (ТЗ, 4.5).
-     * Последним проверяется сам игрок {@code from}: если ходить может только он, ход остаётся у него.
-     *
-     * @return индекс следующего игрока или {@code -1}, если ходить некому
+     * Игрок вернулся: статус {@code ACTIVE}. Если он выходил, забирает из резерва свои карты,
+     * которые ещё никто не взял, в том порядке, в каком они лежат в резерве.
      */
-    private static int nextPlayerIndex(List<Player> players, int from) {
-        int count = players.size();
-        for (int step = 1; step <= count; step++) {
-            int index = (from + step) % count;
-            Player candidate = players.get(index);
-            if (candidate.status() != PlayerStatus.LEFT && !candidate.hand().isEmpty()) {
-                return index;
+    private static CommandResult returnPlayer(GameState state, String playerId) {
+        int playerIndex = state.indexOfPlayer(playerId);
+        Optional<RuleViolation> violation = checkPresenceCommand(state, playerIndex,
+                EnumSet.of(PlayerStatus.DISCONNECTED, PlayerStatus.LEFT));
+        if (violation.isPresent()) {
+            return new CommandResult.Rejected(violation.get());
+        }
+
+        // Один проход по резерву: свои карты — в руку, чужие остаются.
+        Player player = state.players().get(playerIndex);
+        List<Integer> hand = new ArrayList<>(player.hand());
+        List<ReserveCard> remainingReserve = new ArrayList<>();
+        for (ReserveCard card : state.reserve()) {
+            if (card.ownerId().equals(playerId)) {
+                hand.add(card.cardNumber());
+            } else {
+                remainingReserve.add(card);
             }
         }
-        return -1;
+
+        GameState after = replacePlayer(state, playerIndex, player.withHand(hand).withStatus(PlayerStatus.ACTIVE))
+                .withReserve(remainingReserve);
+        return new CommandResult.Accepted(after);
+    }
+
+    /**
+     * Общие проверки для команд отключения, выхода и возвращения.
+     *
+     * @return нарушение правил или пустой {@link Optional}, если команду можно выполнить
+     */
+    private static Optional<RuleViolation> checkPresenceCommand(GameState state, int playerIndex,
+                                                                Set<PlayerStatus> allowedStatuses) {
+        if (state.phase() == Phase.FINISHED) {
+            return Optional.of(RuleViolation.WRONG_PHASE);
+        }
+        if (playerIndex == -1) {
+            return Optional.of(RuleViolation.UNKNOWN_PLAYER);
+        }
+        if (!allowedStatuses.contains(state.players().get(playerIndex).status())) {
+            return Optional.of(RuleViolation.INVALID_PLAYER_STATUS);
+        }
+        return Optional.empty();
+    }
+
+    // ===== Помощники =====
+
+    /** Копия состояния, в которой игрок с индексом {@code index} заменён на {@code player}. */
+    private static GameState replacePlayer(GameState state, int index, Player player) {
+        List<Player> players = new ArrayList<>(state.players());
+        players.set(index, player);
+        return state.withPlayers(players);
     }
 }
