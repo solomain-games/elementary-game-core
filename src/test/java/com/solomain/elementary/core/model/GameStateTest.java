@@ -111,6 +111,22 @@ class GameStateTest {
         assertThat(state.answers().get("p1")).containsOnlyKeys("culprit");
     }
 
+    @Test
+    @DisplayName("находит индекс игрока по идентификатору")
+    void findsPlayerIndexById() {
+        var state = sampleState();
+
+        assertThat(state.indexOfPlayer("p2")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("возвращает -1 для игрока не из партии")
+    void returnsMinusOneForUnknownPlayer() {
+        var state = sampleState();
+
+        assertThat(state.indexOfPlayer("stranger")).isEqualTo(-1);
+    }
+
     // with-методы: проверяем, что меняется ровно одно поле, а исходный объект остаётся прежним.
     // Особенно важно для полей одного типа (table, deck, discard — все List<Integer>):
     // если в with-методе перепутать аргументы, компилятор этого не заметит.

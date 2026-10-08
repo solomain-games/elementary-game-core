@@ -166,7 +166,7 @@ public final class GameEngine {
         if (state.phase() != Phase.PLAYING) {
             return new CommandResult.Rejected(RuleViolation.WRONG_PHASE);
         }
-        int playerIndex = indexOfPlayer(state.players(), playerId);
+        int playerIndex = state.indexOfPlayer(playerId);
         if (playerIndex == -1) {
             return new CommandResult.Rejected(RuleViolation.UNKNOWN_PLAYER);
         }
@@ -218,20 +218,6 @@ public final class GameEngine {
             after = after.withCurrentPlayerIndex(nextIndex);
         }
         return new CommandResult.Accepted(after);
-    }
-
-    /**
-     * Индекс игрока в списке по его идентификатору.
-     *
-     * @return индекс или {@code -1}, если такого игрока нет
-     */
-    private static int indexOfPlayer(List<Player> players, String playerId) {
-        for (int i = 0; i < players.size(); i++) {
-            if (players.get(i).id().equals(playerId)) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     /**

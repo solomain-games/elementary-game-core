@@ -44,4 +44,16 @@ public record CaseDefinition(String id, List<Card> cards, List<Question> questio
 
         Objects.requireNonNull(solution, "solution");
     }
+
+    /**
+     * Карта по номеру.
+     *
+     * @throws IllegalArgumentException если в деле нет карты с таким номером
+     */
+    public Card card(int number) {
+        return cards.stream()
+                .filter(card -> card.number() == number)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("case " + id + " has no card #" + number));
+    }
 }
