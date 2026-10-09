@@ -15,6 +15,7 @@ import java.util.List;
 import static com.solomain.elementary.core.TestStates.accepted;
 import static com.solomain.elementary.core.TestStates.allCards;
 import static com.solomain.elementary.core.TestStates.hand;
+import static com.solomain.elementary.core.TestStates.handle;
 import static com.solomain.elementary.core.TestStates.player;
 import static com.solomain.elementary.core.TestStates.playerById;
 import static com.solomain.elementary.core.TestStates.playing;
@@ -33,7 +34,7 @@ class GameEnginePresenceTest {
         void marksPlayerDisconnected() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7, 8));
 
-            var after = accepted(GameEngine.handle(state, new PlayerDisconnected("p2")));
+            var after = accepted(handle(state, new PlayerDisconnected("p2")));
 
             assertThat(playerById(after, "p2").status()).isEqualTo(PlayerStatus.DISCONNECTED);
             assertThat(hand(after, "p2")).containsExactly(7, 8);
@@ -45,7 +46,7 @@ class GameEnginePresenceTest {
         void keepsTurnOfDisconnectedPlayer() {
             var state = playing(1, List.of(10), player("p1", 5), player("p2", 7));
 
-            var after = accepted(GameEngine.handle(state, new PlayerDisconnected("p2")));
+            var after = accepted(handle(state, new PlayerDisconnected("p2")));
 
             assertThat(after.currentPlayerIndex()).isEqualTo(1);
             assertThat(after.turnNumber()).isEqualTo(state.turnNumber());
@@ -56,7 +57,7 @@ class GameEnginePresenceTest {
         void rejectsAlreadyDisconnected() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", PlayerStatus.DISCONNECTED, 7));
 
-            var result = GameEngine.handle(state, new PlayerDisconnected("p2"));
+            var result = handle(state, new PlayerDisconnected("p2"));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.INVALID_PLAYER_STATUS));
         }
@@ -71,7 +72,7 @@ class GameEnginePresenceTest {
         void movesCardsToReserveOnLeave() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7, 8));
 
-            var after = accepted(GameEngine.handle(state, new PlayerLeft("p2")));
+            var after = accepted(handle(state, new PlayerLeft("p2")));
 
             var p2 = playerById(after, "p2");
             assertThat(p2.status()).isEqualTo(PlayerStatus.LEFT);
@@ -85,7 +86,7 @@ class GameEnginePresenceTest {
             var state = playing(0, List.of(10), reserve("p3", 12),
                     player("p1", 5), player("p2", 7), player("p3", PlayerStatus.LEFT));
 
-            var after = accepted(GameEngine.handle(state, new PlayerLeft("p2")));
+            var after = accepted(handle(state, new PlayerLeft("p2")));
 
             assertThat(after.reserve()).containsExactly(new ReserveCard(12, "p3"), new ReserveCard(7, "p2"));
         }
@@ -95,7 +96,7 @@ class GameEnginePresenceTest {
         void timeoutActsAsLeave() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", PlayerStatus.DISCONNECTED, 7));
 
-            var after = accepted(GameEngine.handle(state, new PlayerDisconnectTimeout("p2")));
+            var after = accepted(handle(state, new PlayerDisconnectTimeout("p2")));
 
             assertThat(playerById(after, "p2").status()).isEqualTo(PlayerStatus.LEFT);
             assertThat(after.reserve()).containsExactly(new ReserveCard(7, "p2"));
@@ -106,7 +107,7 @@ class GameEnginePresenceTest {
         void rejectsTimeoutForActivePlayer() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7));
 
-            var result = GameEngine.handle(state, new PlayerDisconnectTimeout("p2"));
+            var result = handle(state, new PlayerDisconnectTimeout("p2"));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.INVALID_PLAYER_STATUS));
         }
@@ -116,7 +117,7 @@ class GameEnginePresenceTest {
         void rejectsLeaveOfLeftPlayer() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", PlayerStatus.LEFT));
 
-            var result = GameEngine.handle(state, new PlayerLeft("p2"));
+            var result = handle(state, new PlayerLeft("p2"));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.INVALID_PLAYER_STATUS));
         }
@@ -126,7 +127,7 @@ class GameEnginePresenceTest {
         void passesTurnWhenCurrentPlayerLeaves() {
             var state = playing(1, List.of(10), player("p1", 5), player("p2", 7), player("p3", 8));
 
-            var after = accepted(GameEngine.handle(state, new PlayerLeft("p2")));
+            var after = accepted(handle(state, new PlayerLeft("p2")));
 
             assertThat(after.currentPlayerIndex()).isEqualTo(2);
             assertThat(after.turnNumber()).isEqualTo(state.turnNumber() + 1);
@@ -137,7 +138,7 @@ class GameEnginePresenceTest {
         void keepsTurnWhenOtherPlayerLeaves() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7), player("p3", 8));
 
-            var after = accepted(GameEngine.handle(state, new PlayerLeft("p3")));
+            var after = accepted(handle(state, new PlayerLeft("p3")));
 
             assertThat(after.currentPlayerIndex()).isZero();
             assertThat(after.turnNumber()).isEqualTo(state.turnNumber());
@@ -150,7 +151,7 @@ class GameEnginePresenceTest {
             // ход переходит к p2, и он добирает из резерва, а не пропускается.
             var state = playing(0, List.of(), player("p1", 5, 6), player("p2"));
 
-            var after = accepted(GameEngine.handle(state, new PlayerLeft("p1")));
+            var after = accepted(handle(state, new PlayerLeft("p1")));
 
             assertThat(after.currentPlayerIndex()).isEqualTo(1);
             assertThat(hand(after, "p2")).containsExactly(5);
@@ -163,8 +164,8 @@ class GameEnginePresenceTest {
         void twoPlayersLeave() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7), player("p3", 8));
 
-            var afterFirst = accepted(GameEngine.handle(state, new PlayerLeft("p1")));
-            var afterSecond = accepted(GameEngine.handle(afterFirst, new PlayerLeft("p2")));
+            var afterFirst = accepted(handle(state, new PlayerLeft("p1")));
+            var afterSecond = accepted(handle(afterFirst, new PlayerLeft("p2")));
 
             assertThat(afterSecond.reserve()).containsExactly(new ReserveCard(5, "p1"), new ReserveCard(7, "p2"));
             assertThat(afterSecond.players().get(afterSecond.currentPlayerIndex()).id()).isEqualTo("p3");
@@ -181,7 +182,7 @@ class GameEnginePresenceTest {
         void returnsDisconnectedPlayer() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", PlayerStatus.DISCONNECTED, 7, 8));
 
-            var after = accepted(GameEngine.handle(state, new PlayerReturned("p2")));
+            var after = accepted(handle(state, new PlayerReturned("p2")));
 
             assertThat(playerById(after, "p2").status()).isEqualTo(PlayerStatus.ACTIVE);
             assertThat(hand(after, "p2")).containsExactly(7, 8);
@@ -194,7 +195,7 @@ class GameEnginePresenceTest {
             var state = playing(0, List.of(10), reserve,
                     player("p1", 5), player("p2", PlayerStatus.LEFT), player("p3", PlayerStatus.LEFT));
 
-            var after = accepted(GameEngine.handle(state, new PlayerReturned("p2")));
+            var after = accepted(handle(state, new PlayerReturned("p2")));
 
             assertThat(playerById(after, "p2").status()).isEqualTo(PlayerStatus.ACTIVE);
             assertThat(hand(after, "p2")).containsExactly(7, 8);
@@ -208,7 +209,7 @@ class GameEnginePresenceTest {
             var state = playing(0, List.of(), List.of(new ReserveCard(8, "p2")),
                     player("p1", 5, 7), player("p2", PlayerStatus.LEFT));
 
-            var after = accepted(GameEngine.handle(state, new PlayerReturned("p2")));
+            var after = accepted(handle(state, new PlayerReturned("p2")));
 
             assertThat(hand(after, "p2")).containsExactly(8);
             assertThat(hand(after, "p1")).containsExactly(5, 7);
@@ -221,8 +222,8 @@ class GameEnginePresenceTest {
             var state = playing(0, List.of(10, 11), reserve("p2", 7),
                     player("p1", 5), player("p2", PlayerStatus.LEFT), player("p3", 8));
 
-            var returned = accepted(GameEngine.handle(state, new PlayerReturned("p2")));
-            var afterTurn = accepted(GameEngine.handle(returned, new PlayCard("p1", 5)));
+            var returned = accepted(handle(state, new PlayerReturned("p2")));
+            var afterTurn = accepted(handle(returned, new PlayCard("p1", 5)));
 
             assertThat(afterTurn.currentPlayerIndex()).isEqualTo(1);
         }
@@ -232,7 +233,7 @@ class GameEnginePresenceTest {
         void rejectsReturnOfActivePlayer() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7));
 
-            var result = GameEngine.handle(state, new PlayerReturned("p2"));
+            var result = handle(state, new PlayerReturned("p2"));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.INVALID_PLAYER_STATUS));
         }
@@ -247,9 +248,9 @@ class GameEnginePresenceTest {
         void rejectsUnknownPlayer() {
             var state = playing(0, List.of(10), player("p1", 5));
 
-            assertThat(GameEngine.handle(state, new PlayerLeft("stranger")))
+            assertThat(handle(state, new PlayerLeft("stranger")))
                     .isEqualTo(new CommandResult.Rejected(RuleViolation.UNKNOWN_PLAYER));
-            assertThat(GameEngine.handle(state, new PlayerReturned("stranger")))
+            assertThat(handle(state, new PlayerReturned("stranger")))
                     .isEqualTo(new CommandResult.Rejected(RuleViolation.UNKNOWN_PLAYER));
         }
 
@@ -259,7 +260,7 @@ class GameEnginePresenceTest {
         void allowsLeaveBeforeFinish(Phase phase) {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7)).withPhase(phase);
 
-            var result = GameEngine.handle(state, new PlayerLeft("p2"));
+            var result = handle(state, new PlayerLeft("p2"));
 
             assertThat(result).isInstanceOf(CommandResult.Accepted.class);
         }
@@ -269,7 +270,7 @@ class GameEnginePresenceTest {
         void rejectsAfterFinish() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7)).withPhase(Phase.FINISHED);
 
-            var result = GameEngine.handle(state, new PlayerLeft("p2"));
+            var result = handle(state, new PlayerLeft("p2"));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.WRONG_PHASE));
         }

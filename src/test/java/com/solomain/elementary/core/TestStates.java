@@ -1,6 +1,8 @@
 package com.solomain.elementary.core;
 
+import com.solomain.elementary.core.engine.Command;
 import com.solomain.elementary.core.engine.CommandResult;
+import com.solomain.elementary.core.engine.GameEngine;
 import com.solomain.elementary.core.model.GameSettings;
 import com.solomain.elementary.core.model.GameState;
 import com.solomain.elementary.core.model.Phase;
@@ -8,9 +10,11 @@ import com.solomain.elementary.core.model.Player;
 import com.solomain.elementary.core.model.PlayerStatus;
 import com.solomain.elementary.core.model.ReserveCard;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,7 +25,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public final class TestStates {
 
+    /** «Текущий момент» во всех тестах движка. */
+    public static final Instant NOW = Instant.parse("2026-10-01T12:00:00Z");
+
     private TestStates() {
+    }
+
+    /** Обрабатывает команду в момент {@link #NOW} с генератором с фиксированным seed. */
+    public static CommandResult handle(GameState state, Command command) {
+        return GameEngine.handle(state, command, NOW, new Random(42));
     }
 
     /** Состояние в фазе PLAYING без резерва: карта №1 на столе, сброс пуст, ход игрока с индексом {@code current}. */

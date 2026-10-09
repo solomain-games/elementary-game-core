@@ -8,7 +8,8 @@ package com.solomain.elementary.core.engine;
  * в следующих задачах.
  */
 public sealed interface Command
-        permits PlayCard, DiscardCard, PlayerDisconnected, PlayerDisconnectTimeout, PlayerLeft, PlayerReturned {
+        permits PlayCard, DiscardCard, TurnTimeout,
+        PlayerDisconnected, PlayerDisconnectTimeout, PlayerLeft, PlayerReturned {
 
     /** Идентификатор игрока, от имени которого выполняется команда. */
     String playerId();
