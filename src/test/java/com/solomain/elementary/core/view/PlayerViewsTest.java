@@ -181,6 +181,52 @@ class PlayerViewsTest {
     }
 
     @Nested
+    @DisplayName("ответы")
+    class Answering {
+
+        @Test
+        @DisplayName("во время ответов видны вопросы без правильных ответов, кто ответил и свои ответы")
+        void showsQuestionsAndProgress() {
+            var state = midGame(Phase.ANSWERING)
+                    .withAnswerParticipants(Set.of("p1", "p2"))
+                    .withAnswers(Map.of("p1", Map.of("culprit", "no")));
+
+            var view = PlayerViews.of(CASE, state, "p1");
+
+            var answering = view.answering();
+            assertThat(answering.questions()).extracting(QuestionView::id).containsExactly("culprit");
+            assertThat(answering.participants()).containsExactlyInAnyOrder("p1", "p2");
+            assertThat(answering.answered()).containsExactly("p1");
+            assertThat(answering.ownAnswers()).isEqualTo(Map.of("culprit", "no"));
+        }
+
+        @Test
+        @DisplayName("чужие ответы не видны")
+        void hidesOthersAnswers() {
+            var state = midGame(Phase.ANSWERING)
+                    .withAnswerParticipants(Set.of("p1", "p2"))
+                    .withAnswers(Map.of("p1", Map.of("culprit", "no")));
+
+            var view = PlayerViews.of(CASE, state, "p2");
+
+            assertThat(view.answering().ownAnswers()).isEmpty();
+            assertThat(view.answering().answered()).containsExactly("p1");
+        }
+
+        @Test
+        @DisplayName("у вопроса в представлении нет правильного ответа")
+        void questionViewHasNoCorrectAnswer() {
+            assertThat(componentNames(QuestionView.class)).doesNotContain("correctOptionId");
+        }
+
+        @Test
+        @DisplayName("до перехода к ответам блока ответов нет")
+        void hasNoAnsweringBeforeVote() {
+            assertThat(PlayerViews.of(CASE, midGame(Phase.PLAYING), "p1").answering()).isNull();
+        }
+    }
+
+    @Nested
     @DisplayName("что раскрывается в финале")
     class Revealed {
 

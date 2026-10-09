@@ -72,6 +72,7 @@ public final class PlayerViews {
                 state.turnNumber(),
                 state.turnDeadline(),
                 voteView(state),
+                answeringView(caseDefinition, state, viewerId),
                 state.phase() == Phase.FINISHED ? reveal(caseDefinition, state) : null);
     }
 
@@ -84,6 +85,23 @@ public final class PlayerViews {
             return null;
         }
         return new VoteView(vote.initiatorId(), vote.votes(), vote.deadline(), VoteRules.votesNeeded(state));
+    }
+
+    /**
+     * Ответы глазами игрока; {@code null} до перехода к ответам.
+     */
+    private static AnsweringView answeringView(CaseDefinition caseDefinition, GameState state, String viewerId) {
+        if (state.phase() != Phase.ANSWERING && state.phase() != Phase.FINISHED) {
+            return null;
+        }
+        List<QuestionView> questions = caseDefinition.questions().stream()
+                .map(QuestionView::of)
+                .toList();
+        return new AnsweringView(
+                questions,
+                state.answerParticipants(),
+                state.answers().keySet(),
+                state.answers().getOrDefault(viewerId, Map.of()));
     }
 
     /**

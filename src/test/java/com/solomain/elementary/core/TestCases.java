@@ -33,6 +33,22 @@ public final class TestCases {
         return new CaseDefinition("test-" + cardCount, cards, List.of(question), text("Разгадка [[1]]"));
     }
 
+    /**
+     * Дело с картами 1–30 и тремя вопросами для тестов финала.
+     * Правильные ответы: q1 → a, q2 → b, q3 → c.
+     */
+    public static CaseDefinition quiz() {
+        var base = withCards(30);
+        var q1 = new Question("q1", text("Кто?"), List.of(option("a"), option("b")), "a");
+        var q2 = new Question("q2", text("Как?"), List.of(option("a"), option("b")), "b");
+        var q3 = new Question("q3", text("Зачем?"), List.of(option("a"), option("b"), option("c")), "c");
+        return new CaseDefinition("test-quiz", base.cards(), List.of(q1, q2, q3), base.solution());
+    }
+
+    private static AnswerOption option(String id) {
+        return new AnswerOption(id, text("Вариант " + id));
+    }
+
     private static LocalizedText text(String ru) {
         return new LocalizedText(Map.of("ru", ru));
     }

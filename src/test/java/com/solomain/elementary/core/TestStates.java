@@ -3,6 +3,7 @@ package com.solomain.elementary.core;
 import com.solomain.elementary.core.engine.Command;
 import com.solomain.elementary.core.engine.CommandResult;
 import com.solomain.elementary.core.engine.GameEngine;
+import com.solomain.elementary.core.model.CaseDefinition;
 import com.solomain.elementary.core.model.GameSettings;
 import com.solomain.elementary.core.model.GameState;
 import com.solomain.elementary.core.model.Phase;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.random.RandomGenerator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,9 +33,22 @@ public final class TestStates {
     private TestStates() {
     }
 
+    /** Дело по умолчанию для тестов движка: карты 1–30 и один вопрос. */
+    public static final CaseDefinition DEFAULT_CASE = TestCases.withCards(30);
+
     /** Обрабатывает команду в момент {@link #NOW} с генератором с фиксированным seed. */
     public static CommandResult handle(GameState state, Command command) {
-        return GameEngine.handle(state, command, NOW, new Random(42));
+        return handle(DEFAULT_CASE, state, command);
+    }
+
+    /** То же для заданного дела. */
+    public static CommandResult handle(CaseDefinition caseDefinition, GameState state, Command command) {
+        return GameEngine.handle(caseDefinition, state, command, NOW, new Random(42));
+    }
+
+    /** То же в заданный момент с заданным генератором. */
+    public static CommandResult handle(GameState state, Command command, Instant now, RandomGenerator random) {
+        return GameEngine.handle(DEFAULT_CASE, state, command, now, random);
     }
 
     /** Состояние в фазе PLAYING без резерва: карта №1 на столе, сброс пуст, ход игрока с индексом {@code current}. */

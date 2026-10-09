@@ -99,7 +99,7 @@ class GameEngineTimerTest {
         void playsRandomCardFromHand() {
             var state = timed(0, NOW, List.of(10), player("p1", 5, 6, 7), player("p2", 8));
 
-            var after = accepted(GameEngine.handle(state, new TurnTimeout("p1", 7), LATER, new Random(42)));
+            var after = accepted(handle(state, new TurnTimeout("p1", 7), LATER, new Random(42)));
 
             var played = after.table().getLast();
             assertThat(after.table()).hasSize(2);
@@ -115,8 +115,8 @@ class GameEngineTimerTest {
         void isDeterministicForSameSeed() {
             var state = timed(0, NOW, List.of(10), player("p1", 5, 6, 7), player("p2", 8));
 
-            var first = accepted(GameEngine.handle(state, new TurnTimeout("p1", 7), LATER, new Random(1)));
-            var second = accepted(GameEngine.handle(state, new TurnTimeout("p1", 7), LATER, new Random(1)));
+            var first = accepted(handle(state, new TurnTimeout("p1", 7), LATER, new Random(1)));
+            var second = accepted(handle(state, new TurnTimeout("p1", 7), LATER, new Random(1)));
 
             assertThat(first).isEqualTo(second);
         }
@@ -126,7 +126,7 @@ class GameEngineTimerTest {
         void appliesToDisconnectedPlayer() {
             var state = timed(0, NOW, List.of(10), player("p1", PlayerStatus.DISCONNECTED, 5), player("p2", 8));
 
-            var after = accepted(GameEngine.handle(state, new TurnTimeout("p1", 7), LATER, new Random(42)));
+            var after = accepted(handle(state, new TurnTimeout("p1", 7), LATER, new Random(42)));
 
             assertThat(after.table()).containsExactly(1, 5);
         }
@@ -137,7 +137,7 @@ class GameEngineTimerTest {
             var deadline = NOW;
             var state = timed(0, deadline, List.of(10), player("p1", 5), player("p2", 8));
 
-            var result = GameEngine.handle(state, new TurnTimeout("p1", 7), deadline, new Random(42));
+            var result = handle(state, new TurnTimeout("p1", 7), deadline, new Random(42));
 
             assertThat(result).isInstanceOf(CommandResult.Accepted.class);
         }
@@ -152,7 +152,7 @@ class GameEngineTimerTest {
         void rejectsStaleTurnNumber() {
             var state = timed(0, NOW, List.of(10), player("p1", 5), player("p2", 8));
 
-            var result = GameEngine.handle(state, new TurnTimeout("p1", 6), LATER, new Random(42));
+            var result = handle(state, new TurnTimeout("p1", 6), LATER, new Random(42));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.STALE_TIMEOUT));
         }
@@ -162,7 +162,7 @@ class GameEngineTimerTest {
         void rejectsWrongPlayer() {
             var state = timed(0, NOW, List.of(10), player("p1", 5), player("p2", 8));
 
-            var result = GameEngine.handle(state, new TurnTimeout("p2", 7), LATER, new Random(42));
+            var result = handle(state, new TurnTimeout("p2", 7), LATER, new Random(42));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.STALE_TIMEOUT));
         }
@@ -172,7 +172,7 @@ class GameEngineTimerTest {
         void rejectsBeforeDeadline() {
             var state = timed(0, NOW.plusSeconds(30), List.of(10), player("p1", 5), player("p2", 8));
 
-            var result = GameEngine.handle(state, new TurnTimeout("p1", 7), NOW, new Random(42));
+            var result = handle(state, new TurnTimeout("p1", 7), NOW, new Random(42));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.TURN_NOT_EXPIRED));
         }
@@ -193,7 +193,7 @@ class GameEngineTimerTest {
         void rejectsOutsidePlaying(Phase phase) {
             var state = timed(0, NOW, List.of(10), player("p1", 5), player("p2", 8)).withPhase(phase);
 
-            var result = GameEngine.handle(state, new TurnTimeout("p1", 7), LATER, new Random(42));
+            var result = handle(state, new TurnTimeout("p1", 7), LATER, new Random(42));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.WRONG_PHASE));
         }
