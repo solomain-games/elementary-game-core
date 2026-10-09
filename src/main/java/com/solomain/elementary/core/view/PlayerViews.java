@@ -1,11 +1,13 @@
 package com.solomain.elementary.core.view;
 
+import com.solomain.elementary.core.engine.VoteRules;
 import com.solomain.elementary.core.model.Card;
 import com.solomain.elementary.core.model.CaseDefinition;
 import com.solomain.elementary.core.model.GameState;
 import com.solomain.elementary.core.model.Phase;
 import com.solomain.elementary.core.model.Player;
 import com.solomain.elementary.core.model.Question;
+import com.solomain.elementary.core.model.Vote;
 
 import java.util.List;
 import java.util.Map;
@@ -69,7 +71,19 @@ public final class PlayerViews {
                 state.discard().size(),
                 state.turnNumber(),
                 state.turnDeadline(),
+                voteView(state),
                 state.phase() == Phase.FINISHED ? reveal(caseDefinition, state) : null);
+    }
+
+    /**
+     * Текущее голосование; {@code null}, если его нет.
+     */
+    private static VoteView voteView(GameState state) {
+        Vote vote = state.vote();
+        if (vote == null) {
+            return null;
+        }
+        return new VoteView(vote.initiatorId(), vote.votes(), vote.deadline(), VoteRules.votesNeeded(state));
     }
 
     /**

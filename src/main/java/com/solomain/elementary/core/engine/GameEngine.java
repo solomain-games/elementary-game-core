@@ -165,11 +165,26 @@ public final class GameEngine {
             case PlayCard c -> takeTurn(state, c.playerId(), c.cardNumber(), true, now);
             case DiscardCard c -> takeTurn(state, c.playerId(), c.cardNumber(), false, now);
             case TurnTimeout c -> timeout(state, c, now, random);
-            case PlayerDisconnected c -> disconnect(state, c.playerId());
-            case PlayerDisconnectTimeout c -> leave(state, c.playerId(), EnumSet.of(PlayerStatus.DISCONNECTED), now);
-            case PlayerLeft c ->
-                    leave(state, c.playerId(), EnumSet.of(PlayerStatus.ACTIVE, PlayerStatus.DISCONNECTED), now);
-            case PlayerReturned c -> returnPlayer(state, c.playerId());
+            case PlayerDisconnected c -> afterPresenceChange(disconnect(state, c.playerId()));
+            case PlayerDisconnectTimeout c ->
+                    afterPresenceChange(leave(state, c.playerId(), EnumSet.of(PlayerStatus.DISCONNECTED), now));
+            case PlayerLeft c -> afterPresenceChange(
+                    leave(state, c.playerId(), EnumSet.of(PlayerStatus.ACTIVE, PlayerStatus.DISCONNECTED), now));
+            case PlayerReturned c -> afterPresenceChange(returnPlayer(state, c.playerId()));
+            case StartVote c -> VoteRules.start(state, c.playerId(), now);
+            case CastVote c -> VoteRules.cast(state, c.playerId(), c.inFavor());
+            case VoteTimeout c -> VoteRules.timeout(state, c.deadline(), now);
+        };
+    }
+
+    /**
+     * После изменения состава игроков перепроверяет текущее голосование:
+     * большинство считается среди тех, кто в игре сейчас (ТЗ, 4.7).
+     */
+    private static CommandResult afterPresenceChange(CommandResult result) {
+        return switch (result) {
+            case CommandResult.Accepted(GameState state) -> new CommandResult.Accepted(VoteRules.reevaluate(state));
+            case CommandResult.Rejected rejected -> rejected;
         };
     }
 
