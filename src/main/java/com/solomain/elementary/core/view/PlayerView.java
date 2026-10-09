@@ -23,6 +23,7 @@ import java.util.Objects;
  * @param discardSize     сколько карт в сбросе
  * @param turnNumber      номер хода
  * @param turnDeadline    когда истекает ход; {@code null} без таймера
+ * @param vote            текущее голосование за переход к ответам; {@code null}, если его нет
  * @param reveal          раскрытие в финале; {@code null} до фазы {@code FINISHED}
  */
 public record PlayerView(String caseId,
@@ -36,6 +37,7 @@ public record PlayerView(String caseId,
                          int discardSize,
                          int turnNumber,
                          Instant turnDeadline,
+                         VoteView vote,
                          Reveal reveal) {
 
     public PlayerView {

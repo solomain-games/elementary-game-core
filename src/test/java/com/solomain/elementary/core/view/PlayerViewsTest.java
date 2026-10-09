@@ -8,12 +8,14 @@ import com.solomain.elementary.core.model.Phase;
 import com.solomain.elementary.core.model.Player;
 import com.solomain.elementary.core.model.PlayerStatus;
 import com.solomain.elementary.core.model.ReserveCard;
+import com.solomain.elementary.core.model.Vote;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -118,6 +120,26 @@ class PlayerViewsTest {
             var view = PlayerViews.of(CASE, midGame(Phase.NO_MOVES_LEFT), "p2");
 
             assertThat(view.currentPlayerId()).isNull();
+        }
+
+        @Test
+        @DisplayName("видно текущее голосование: кто как проголосовал и сколько нужно")
+        void showsVote() {
+            var vote = new Vote("p1", Map.of("p1", true), Instant.parse("2026-10-01T12:00:30Z"));
+            var state = midGame(Phase.PLAYING).withVote(vote);
+
+            var view = PlayerViews.of(CASE, state, "p2");
+
+            // в игре только p1 (p2 отключён, p3 вышел) — нужен 1 голос
+            assertThat(view.vote()).isEqualTo(new VoteView("p1", Map.of("p1", true), vote.deadline(), 1));
+        }
+
+        @Test
+        @DisplayName("без голосования поле пустое")
+        void hasNoVoteByDefault() {
+            var view = PlayerViews.of(CASE, midGame(Phase.PLAYING), "p1");
+
+            assertThat(view.vote()).isNull();
         }
     }
 
