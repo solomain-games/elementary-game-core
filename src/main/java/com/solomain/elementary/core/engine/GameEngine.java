@@ -10,6 +10,8 @@ import com.solomain.elementary.core.model.Player;
 import com.solomain.elementary.core.model.PlayerStatus;
 import com.solomain.elementary.core.model.ReserveCard;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -144,20 +146,29 @@ public final class GameEngine {
      * <p>Исходное состояние не меняется. Если команда отклонена, вызывающему коду достаточно
      * продолжать работать со старым состоянием.
      *
+     * <p>Время и случайность передаются снаружи, как и в {@link #start}: ядро не читает системные часы
+     * и не создаёт генераторы само, поэтому в тестах результат полностью предсказуем.
+     *
      * @param state   текущее состояние партии
-     * @param command команда игрока
+     * @param command команда игрока или системы
+     * @param now     текущий момент: от него отсчитывается срок хода
+     * @param random  генератор случайных чисел: нужен, когда ход делается за игрока по таймеру
      * @return {@link CommandResult.Accepted} с новым состоянием или {@link CommandResult.Rejected} с причиной
      */
-    public static CommandResult handle(GameState state, Command command) {
+    public static CommandResult handle(GameState state, Command command, Instant now, RandomGenerator random) {
         Objects.requireNonNull(state, "state");
         Objects.requireNonNull(command, "command");
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(random, "random");
 
         return switch (command) {
-            case PlayCard c -> takeTurn(state, c.playerId(), c.cardNumber(), true);
-            case DiscardCard c -> takeTurn(state, c.playerId(), c.cardNumber(), false);
+            case PlayCard c -> takeTurn(state, c.playerId(), c.cardNumber(), true, now);
+            case DiscardCard c -> takeTurn(state, c.playerId(), c.cardNumber(), false, now);
+            case TurnTimeout c -> timeout(state, c, now, random);
             case PlayerDisconnected c -> disconnect(state, c.playerId());
-            case PlayerDisconnectTimeout c -> leave(state, c.playerId(), EnumSet.of(PlayerStatus.DISCONNECTED));
-            case PlayerLeft c -> leave(state, c.playerId(), EnumSet.of(PlayerStatus.ACTIVE, PlayerStatus.DISCONNECTED));
+            case PlayerDisconnectTimeout c -> leave(state, c.playerId(), EnumSet.of(PlayerStatus.DISCONNECTED), now);
+            case PlayerLeft c ->
+                    leave(state, c.playerId(), EnumSet.of(PlayerStatus.ACTIVE, PlayerStatus.DISCONNECTED), now);
             case PlayerReturned c -> returnPlayer(state, c.playerId());
         };
     }
@@ -168,8 +179,10 @@ public final class GameEngine {
      * Ход игрока (ТЗ, 4.2–4.4): выложить или сбросить карту, добрать одну и передать ход.
      *
      * @param toTable {@code true} — выложить на стол, {@code false} — сбросить
+     * @param now     текущий момент: от него отсчитывается срок следующего хода
      */
-    private static CommandResult takeTurn(GameState state, String playerId, int cardNumber, boolean toTable) {
+    private static CommandResult takeTurn(GameState state, String playerId, int cardNumber, boolean toTable,
+                                          Instant now) {
         // 1. Проверки правил. Порядок важен: от общего (фаза) к частному (карта).
         if (state.phase() != Phase.PLAYING) {
             return new CommandResult.Rejected(RuleViolation.WRONG_PHASE);
@@ -203,7 +216,7 @@ public final class GameEngine {
 
         // 3. Добор в конце хода и передача хода следующему.
         after = drawFor(after, playerIndex);
-        return new CommandResult.Accepted(advanceTurn(after, playerIndex));
+        return new CommandResult.Accepted(advanceTurn(after, playerIndex, now));
     }
 
     /**
@@ -234,22 +247,60 @@ public final class GameEngine {
     /**
      * Передаёт ход следующему игроку, который может ходить (ТЗ, 4.2).
      * Если у него нет карт, он сначала добирает одну. Если ходить некому — фаза {@link Phase#NO_MOVES_LEFT}.
+     * Если в партии есть таймер и идёт игра, новому ходу назначается срок (ТЗ, 4.3).
      *
      * @param fromIndex индекс игрока, после которого ищется следующий
+     * @param now       текущий момент: от него отсчитывается срок нового хода
      */
-    private static GameState advanceTurn(GameState state, int fromIndex) {
+    private static GameState advanceTurn(GameState state, int fromIndex, Instant now) {
         GameState after = state.withTurnNumber(state.turnNumber() + 1);
 
         int nextIndex = nextPlayerIndex(after, fromIndex);
         if (nextIndex == -1) {
-            return after.withPhase(Phase.NO_MOVES_LEFT);
+            after = after.withPhase(Phase.NO_MOVES_LEFT);
+        } else {
+            after = after.withCurrentPlayerIndex(nextIndex);
+            if (after.players().get(nextIndex).hand().isEmpty()) {
+                after = drawFor(after, nextIndex);
+            }
+        }
+        return after.withTurnDeadline(deadlineFor(after, now));
+    }
+
+    /**
+     * Срок текущего хода: {@code now + turnTimeout}, если таймер включён и идёт игра; иначе {@code null}.
+     * Во время предыстории и после окончания ходов срока нет.
+     */
+    private static Instant deadlineFor(GameState state, Instant now) {
+        Duration timeout = state.settings().turnTimeout();
+        if (timeout == null || state.phase() != Phase.PLAYING) {
+            return null;
+        }
+        return now.plus(timeout);
+    }
+
+    /**
+     * Время хода истекло (ТЗ, 4.3): на стол выкладывается случайная карта из руки игрока.
+     * Дальше всё как при обычном ходе — добор, передача хода, новый срок.
+     */
+    private static CommandResult timeout(GameState state, TurnTimeout command, Instant now, RandomGenerator random) {
+        if (state.phase() != Phase.PLAYING) {
+            return new CommandResult.Rejected(RuleViolation.WRONG_PHASE);
+        }
+        if (state.settings().turnTimeout() == null) {
+            return new CommandResult.Rejected(RuleViolation.NO_TURN_TIMER);
+        }
+        Player current = state.players().get(state.currentPlayerIndex());
+        if (command.turnNumber() != state.turnNumber() || !current.id().equals(command.playerId())) {
+            return new CommandResult.Rejected(RuleViolation.STALE_TIMEOUT);
+        }
+        if (state.turnDeadline() != null && now.isBefore(state.turnDeadline())) {
+            return new CommandResult.Rejected(RuleViolation.TURN_NOT_EXPIRED);
         }
 
-        after = after.withCurrentPlayerIndex(nextIndex);
-        if (after.players().get(nextIndex).hand().isEmpty()) {
-            after = drawFor(after, nextIndex);
-        }
-        return after;
+        List<Integer> hand = current.hand();
+        int card = hand.get(random.nextInt(hand.size()));
+        return takeTurn(state, current.id(), card, true, now);
     }
 
     /**
@@ -296,8 +347,10 @@ public final class GameEngine {
      * статус {@code LEFT}. Если сейчас был его ход, ход переходит к следующему.
      *
      * @param allowedStatuses статусы, из которых возможен выход этой командой
+     * @param now             текущий момент: от него отсчитывается срок хода следующего игрока
      */
-    private static CommandResult leave(GameState state, String playerId, Set<PlayerStatus> allowedStatuses) {
+    private static CommandResult leave(GameState state, String playerId, Set<PlayerStatus> allowedStatuses,
+                                       Instant now) {
         int playerIndex = state.indexOfPlayer(playerId);
         Optional<RuleViolation> violation = checkPresenceCommand(state, playerIndex, allowedStatuses);
         if (violation.isPresent()) {
@@ -314,7 +367,7 @@ public final class GameEngine {
 
         boolean turnsInProgress = state.phase() == Phase.PROLOGUE || state.phase() == Phase.PLAYING;
         if (turnsInProgress && playerIndex == state.currentPlayerIndex()) {
-            after = advanceTurn(after, playerIndex);
+            after = advanceTurn(after, playerIndex, now);
         }
         return new CommandResult.Accepted(after);
     }

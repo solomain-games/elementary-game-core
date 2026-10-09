@@ -14,6 +14,7 @@ import java.util.List;
 import static com.solomain.elementary.core.TestStates.accepted;
 import static com.solomain.elementary.core.TestStates.allCards;
 import static com.solomain.elementary.core.TestStates.hand;
+import static com.solomain.elementary.core.TestStates.handle;
 import static com.solomain.elementary.core.TestStates.player;
 import static com.solomain.elementary.core.TestStates.playing;
 import static com.solomain.elementary.core.TestStates.reserve;
@@ -31,7 +32,7 @@ class GameEngineTurnTest {
         void playMovesCardToTable() {
             var state = playing(0, List.of(10, 11), player("p1", 5, 6), player("p2", 7));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(after.table()).containsExactly(1, 5);
             assertThat(after.discard()).isEmpty();
@@ -43,7 +44,7 @@ class GameEngineTurnTest {
         void discardMovesCardToDiscard() {
             var state = playing(0, List.of(10, 11), player("p1", 5, 6), player("p2", 7));
 
-            var after = accepted(GameEngine.handle(state, new DiscardCard("p1", 5)));
+            var after = accepted(handle(state, new DiscardCard("p1", 5)));
 
             assertThat(after.discard()).containsExactly(5);
             assertThat(after.table()).containsExactly(1);
@@ -56,7 +57,7 @@ class GameEngineTurnTest {
             // Ловушка List.remove(int): remove(1) удалит элемент с индексом 1, а не число 1.
             var state = playing(0, List.of(), player("p1", 9, 2, 4), player("p2", 7));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 2)));
+            var after = accepted(handle(state, new PlayCard("p1", 2)));
 
             assertThat(hand(after, "p1")).containsExactly(9, 4);
         }
@@ -67,7 +68,7 @@ class GameEngineTurnTest {
             var state = playing(0, List.of(10, 11), reserve("p3", 12),
                     player("p1", 5, 6), player("p2", 7, 8));
 
-            var after = accepted(GameEngine.handle(state, new DiscardCard("p1", 6)));
+            var after = accepted(handle(state, new DiscardCard("p1", 6)));
 
             assertThat(allCards(after)).containsExactlyInAnyOrderElementsOf(allCards(state));
         }
@@ -82,7 +83,7 @@ class GameEngineTurnTest {
         void drawsTopCardOfDeck() {
             var state = playing(0, List.of(10, 11), player("p1", 5), player("p2", 7));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(hand(after, "p1")).containsExactly(10);
             assertThat(after.deck()).containsExactly(11);
@@ -93,7 +94,7 @@ class GameEngineTurnTest {
         void drawsFromReserveWhenDeckIsEmpty() {
             var state = playing(0, List.of(), reserve("p3", 12), player("p1", 5), player("p2", 7));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(hand(after, "p1")).containsExactly(12);
             assertThat(after.reserve()).isEmpty();
@@ -104,7 +105,7 @@ class GameEngineTurnTest {
         void drawsNothingWhenNothingLeft() {
             var state = playing(0, List.of(), player("p1", 5, 6), player("p2", 7));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(hand(after, "p1")).containsExactly(6);
         }
@@ -119,7 +120,7 @@ class GameEngineTurnTest {
         void passesTurnToNextPlayer() {
             var state = playing(0, List.of(10, 11), player("p1", 5), player("p2", 7), player("p3", 8));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(after.currentPlayerIndex()).isEqualTo(1);
         }
@@ -129,7 +130,7 @@ class GameEngineTurnTest {
         void wrapsAroundToFirstPlayer() {
             var state = playing(2, List.of(10, 11), player("p1", 5), player("p2", 7), player("p3", 8));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p3", 8)));
+            var after = accepted(handle(state, new PlayCard("p3", 8)));
 
             assertThat(after.currentPlayerIndex()).isZero();
         }
@@ -142,7 +143,7 @@ class GameEngineTurnTest {
                     player("p2", PlayerStatus.LEFT),
                     player("p3", 8));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(after.currentPlayerIndex()).isEqualTo(2);
         }
@@ -155,7 +156,7 @@ class GameEngineTurnTest {
                     player("p2", PlayerStatus.DISCONNECTED, 7),
                     player("p3", 8));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(after.currentPlayerIndex()).isEqualTo(1);
         }
@@ -165,7 +166,7 @@ class GameEngineTurnTest {
         void skipsPlayersWithEmptyHand() {
             var state = playing(0, List.of(), player("p1", 5, 6), player("p2"), player("p3", 8));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(after.currentPlayerIndex()).isEqualTo(2);
         }
@@ -175,7 +176,7 @@ class GameEngineTurnTest {
         void singlePlayerKeepsTurn() {
             var state = playing(0, List.of(10), player("p1", 5, 6));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(after.currentPlayerIndex()).isZero();
         }
@@ -185,7 +186,7 @@ class GameEngineTurnTest {
         void incrementsTurnNumber() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(after.turnNumber()).isEqualTo(state.turnNumber() + 1);
         }
@@ -195,7 +196,7 @@ class GameEngineTurnTest {
         void switchesToNoMovesLeftWhenAllCardsPlayed() {
             var state = playing(0, List.of(), player("p1", 5), player("p2"));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(after.phase()).isEqualTo(Phase.NO_MOVES_LEFT);
         }
@@ -205,7 +206,7 @@ class GameEngineTurnTest {
         void staysPlayingWhileSomeoneHasCards() {
             var state = playing(0, List.of(), player("p1", 5), player("p2", 7));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             assertThat(after.phase()).isEqualTo(Phase.PLAYING);
             assertThat(after.currentPlayerIndex()).isEqualTo(1);
@@ -217,7 +218,7 @@ class GameEngineTurnTest {
             var state = playing(0, List.of(), reserve("p3", 12, 13),
                     player("p1", 5), player("p2"), player("p3", PlayerStatus.LEFT));
 
-            var after = accepted(GameEngine.handle(state, new PlayCard("p1", 5)));
+            var after = accepted(handle(state, new PlayCard("p1", 5)));
 
             // p1 добрал 12 в конце своего хода, p2 добрал 13 в начале своего
             assertThat(after.currentPlayerIndex()).isEqualTo(1);
@@ -232,7 +233,7 @@ class GameEngineTurnTest {
             var state = playing(0, List.of(), reserve("p3", 12),
                     player("p1", 5), player("p2"), player("p3", PlayerStatus.LEFT));
 
-            var after = accepted(GameEngine.handle(state, new DiscardCard("p1", 5)));
+            var after = accepted(handle(state, new DiscardCard("p1", 5)));
 
             assertThat(after.phase()).isEqualTo(Phase.PLAYING);
             assertThat(hand(after, "p1")).containsExactly(12);
@@ -250,7 +251,7 @@ class GameEngineTurnTest {
         void rejectsTurnOutsidePlayingPhase(Phase phase) {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7)).withPhase(phase);
 
-            var result = GameEngine.handle(state, new PlayCard("p1", 5));
+            var result = handle(state, new PlayCard("p1", 5));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.WRONG_PHASE));
         }
@@ -260,7 +261,7 @@ class GameEngineTurnTest {
         void rejectsUnknownPlayer() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7));
 
-            var result = GameEngine.handle(state, new PlayCard("stranger", 5));
+            var result = handle(state, new PlayCard("stranger", 5));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.UNKNOWN_PLAYER));
         }
@@ -270,7 +271,7 @@ class GameEngineTurnTest {
         void rejectsNotYourTurn() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7));
 
-            var result = GameEngine.handle(state, new PlayCard("p2", 7));
+            var result = handle(state, new PlayCard("p2", 7));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.NOT_YOUR_TURN));
         }
@@ -280,7 +281,7 @@ class GameEngineTurnTest {
         void rejectsCardNotInHand() {
             var state = playing(0, List.of(10), player("p1", 5), player("p2", 7));
 
-            var result = GameEngine.handle(state, new DiscardCard("p1", 7));
+            var result = handle(state, new DiscardCard("p1", 7));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.CARD_NOT_IN_HAND));
         }
