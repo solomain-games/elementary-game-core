@@ -12,7 +12,7 @@ package com.solomain.elementary.core.engine;
  * в следующих задачах.
  */
 public sealed interface Command
-        permits PlayCard, DiscardCard, TurnTimeout,
+        permits BeginPlay, PlayCard, DiscardCard, TurnTimeout,
         PlayerDisconnected, PlayerDisconnectTimeout, PlayerLeft, PlayerReturned,
         StartVote, CastVote, VoteTimeout,
         SubmitAnswers, ForceResults {

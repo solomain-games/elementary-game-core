@@ -165,6 +165,7 @@ public final class GameEngine {
         Objects.requireNonNull(random, "random");
 
         return switch (command) {
+            case BeginPlay c -> beginPlay(state, now);
             case PlayCard c -> takeTurn(state, c.playerId(), c.cardNumber(), true, now);
             case DiscardCard c -> takeTurn(state, c.playerId(), c.cardNumber(), false, now);
             case TurnTimeout c -> timeout(state, c, now, random);
@@ -192,6 +193,24 @@ public final class GameEngine {
                     AnswerRules.reevaluate(caseDefinition, VoteRules.reevaluate(state)));
             case CommandResult.Rejected rejected -> rejected;
         };
+    }
+
+    // ===== Начало игры =====
+
+    /**
+     * Переход из предыстории к ходам. Ходит первый игрок в порядке ходов; если он не может ходить
+     * (вышел во время предыстории или остался без карт), ход сразу переходит дальше.
+     */
+    private static CommandResult beginPlay(GameState state, Instant now) {
+        if (state.phase() != Phase.PROLOGUE) {
+            return new CommandResult.Rejected(RuleViolation.WRONG_PHASE);
+        }
+        GameState playing = state.withPhase(Phase.PLAYING);
+        Player first = playing.players().get(playing.currentPlayerIndex());
+        if (first.status() != PlayerStatus.LEFT && !first.hand().isEmpty()) {
+            return new CommandResult.Accepted(playing.withTurnDeadline(deadlineFor(playing, now)));
+        }
+        return new CommandResult.Accepted(advanceTurn(playing, playing.currentPlayerIndex(), now));
     }
 
     // ===== Ход =====
