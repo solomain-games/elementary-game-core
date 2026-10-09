@@ -24,6 +24,7 @@ import java.util.Objects;
  * @param turnNumber      номер хода
  * @param turnDeadline    когда истекает ход; {@code null} без таймера
  * @param vote            текущее голосование за переход к ответам; {@code null}, если его нет
+ * @param answering       вопросы и ход ответов; есть только в фазах {@code ANSWERING} и {@code FINISHED}
  * @param reveal          раскрытие в финале; {@code null} до фазы {@code FINISHED}
  */
 public record PlayerView(String caseId,
@@ -38,6 +39,7 @@ public record PlayerView(String caseId,
                          int turnNumber,
                          Instant turnDeadline,
                          VoteView vote,
+                         AnsweringView answering,
                          Reveal reveal) {
 
     public PlayerView {

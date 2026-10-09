@@ -172,7 +172,7 @@ class GameEngineVoteTest {
             var state = run(game(4), new StartVote("p1"), new CastVote("p2", true));
             var deadline = state.vote().deadline();
 
-            var after = accepted(GameEngine.handle(state, new VoteTimeout(deadline), deadline, new Random(42)));
+            var after = accepted(handle(state, new VoteTimeout(deadline), deadline, new Random(42)));
 
             assertThat(voteFailed(after)).isTrue();
         }
@@ -193,7 +193,7 @@ class GameEngineVoteTest {
             var state = run(game(4), new StartVote("p1"));
             var otherDeadline = NOW.minusSeconds(100);
 
-            var result = GameEngine.handle(state, new VoteTimeout(otherDeadline), NOW.plusSeconds(60), new Random(42));
+            var result = handle(state, new VoteTimeout(otherDeadline), NOW.plusSeconds(60), new Random(42));
 
             assertThat(result).isEqualTo(new CommandResult.Rejected(RuleViolation.STALE_TIMEOUT));
         }

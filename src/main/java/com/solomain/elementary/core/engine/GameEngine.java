@@ -149,13 +149,16 @@ public final class GameEngine {
      * <p>Время и случайность передаются снаружи, как и в {@link #start}: ядро не читает системные часы
      * и не создаёт генераторы само, поэтому в тестах результат полностью предсказуем.
      *
-     * @param state   текущее состояние партии
-     * @param command команда игрока или системы
-     * @param now     текущий момент: от него отсчитывается срок хода
-     * @param random  генератор случайных чисел: нужен, когда ход делается за игрока по таймеру
+     * @param caseDefinition дело, которое играется: нужно для проверки ответов и подсчёта очков
+     * @param state          текущее состояние партии
+     * @param command        команда игрока или системы
+     * @param now            текущий момент: от него отсчитываются сроки хода и голосования
+     * @param random         генератор случайных чисел: нужен, когда ход делается за игрока по таймеру
      * @return {@link CommandResult.Accepted} с новым состоянием или {@link CommandResult.Rejected} с причиной
      */
-    public static CommandResult handle(GameState state, Command command, Instant now, RandomGenerator random) {
+    public static CommandResult handle(CaseDefinition caseDefinition, GameState state, Command command,
+                                       Instant now, RandomGenerator random) {
+        Objects.requireNonNull(caseDefinition, "caseDefinition");
         Objects.requireNonNull(state, "state");
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(now, "now");
@@ -165,25 +168,28 @@ public final class GameEngine {
             case PlayCard c -> takeTurn(state, c.playerId(), c.cardNumber(), true, now);
             case DiscardCard c -> takeTurn(state, c.playerId(), c.cardNumber(), false, now);
             case TurnTimeout c -> timeout(state, c, now, random);
-            case PlayerDisconnected c -> afterPresenceChange(disconnect(state, c.playerId()));
-            case PlayerDisconnectTimeout c ->
-                    afterPresenceChange(leave(state, c.playerId(), EnumSet.of(PlayerStatus.DISCONNECTED), now));
-            case PlayerLeft c -> afterPresenceChange(
+            case PlayerDisconnected c -> afterPresenceChange(caseDefinition, disconnect(state, c.playerId()));
+            case PlayerDisconnectTimeout c -> afterPresenceChange(caseDefinition,
+                    leave(state, c.playerId(), EnumSet.of(PlayerStatus.DISCONNECTED), now));
+            case PlayerLeft c -> afterPresenceChange(caseDefinition,
                     leave(state, c.playerId(), EnumSet.of(PlayerStatus.ACTIVE, PlayerStatus.DISCONNECTED), now));
-            case PlayerReturned c -> afterPresenceChange(returnPlayer(state, c.playerId()));
+            case PlayerReturned c -> afterPresenceChange(caseDefinition, returnPlayer(state, c.playerId()));
             case StartVote c -> VoteRules.start(state, c.playerId(), now);
             case CastVote c -> VoteRules.cast(state, c.playerId(), c.inFavor());
             case VoteTimeout c -> VoteRules.timeout(state, c.deadline(), now);
+            case SubmitAnswers c -> AnswerRules.submit(caseDefinition, state, c.playerId(), c.answers());
+            case ForceResults c -> AnswerRules.forceResults(caseDefinition, state, c.playerId());
         };
     }
 
     /**
-     * После изменения состава игроков перепроверяет текущее голосование:
-     * большинство считается среди тех, кто в игре сейчас (ТЗ, 4.7).
+     * После изменения состава игроков перепроверяет голосование (большинство считается среди тех,
+     * кто в игре сейчас, ТЗ 4.7) и ответы (вернувшийся может ответить, вышедших не ждём, ТЗ 4.8).
      */
-    private static CommandResult afterPresenceChange(CommandResult result) {
+    private static CommandResult afterPresenceChange(CaseDefinition caseDefinition, CommandResult result) {
         return switch (result) {
-            case CommandResult.Accepted(GameState state) -> new CommandResult.Accepted(VoteRules.reevaluate(state));
+            case CommandResult.Accepted(GameState state) -> new CommandResult.Accepted(
+                    AnswerRules.reevaluate(caseDefinition, VoteRules.reevaluate(state)));
             case CommandResult.Rejected rejected -> rejected;
         };
     }
