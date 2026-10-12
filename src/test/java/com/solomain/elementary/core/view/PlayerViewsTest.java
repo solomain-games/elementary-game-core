@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -248,6 +249,15 @@ class PlayerViewsTest {
             var view = PlayerViews.of(CASE, finished(), "p1");
 
             assertThat(view.reveal().relevantCards()).containsExactlyInAnyOrder(1, 3, 5, 7, 9, 11);
+        }
+
+        @Test
+        @DisplayName("лица всех карт дела — для ссылок из истинной картины")
+        void revealsAllCardFaces() {
+            var view = PlayerViews.of(CASE, finished(), "p1");
+
+            assertThat(numbers(view.reveal().allCards()))
+                    .containsExactlyElementsOf(IntStream.rangeClosed(1, 12).boxed().toList());
         }
 
         @Test
