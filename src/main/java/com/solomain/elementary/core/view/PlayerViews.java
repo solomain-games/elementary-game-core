@@ -116,8 +116,13 @@ public final class PlayerViews {
         Map<String, String> correctAnswers = caseDefinition.questions().stream()
                 .collect(Collectors.toMap(Question::id, Question::correctOptionId));
 
+        List<CardFace> allCards = caseDefinition.cards().stream()
+                .map(CardFace::of)
+                .toList();
+
         return new Reveal(
                 faces(caseDefinition, state.discard()),
+                allCards,
                 relevantCards,
                 caseDefinition.solution(),
                 correctAnswers,
